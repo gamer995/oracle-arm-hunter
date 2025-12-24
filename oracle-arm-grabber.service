@@ -1,0 +1,24 @@
+[Unit]
+Description=Oracle Cloud ARM Instance Auto Grabber
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/oracle-arm-grabber
+
+# 根据您的 OCI CLI 安装路径修改
+# 默认安装在用户目录: /home/<username>/bin
+# 如果是 root 安装: /root/bin
+Environment="HOME=/root"
+Environment="PATH=/home/ubuntu/bin:/root/bin:/usr/local/bin:/usr/bin:/bin"
+
+ExecStart=/opt/oracle-arm-grabber/oracle_arm_grabber.sh
+Restart=on-failure
+RestartSec=60
+StandardOutput=append:/var/log/oracle_arm_grabber.log
+StandardError=append:/var/log/oracle_arm_grabber.log
+
+[Install]
+WantedBy=multi-user.target
