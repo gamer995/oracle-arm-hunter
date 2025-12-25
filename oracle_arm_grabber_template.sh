@@ -31,7 +31,7 @@ SUBNET_OCID="<your_subnet_ocid>"
 DISPLAY_NAME="free-arm-ubuntu"   # 实例名称
 SHAPE="VM.Standard.A1.Flex"      # ARM 实例类型（不要修改）
 OCPUS=2                          # CPU 核心数 (1-4，免费额度共 4 核)
-MEM_GB=16                        # 内存 GB (6-24，免费额度共 24GB)
+MEM_GB=12                        # 内存 GB (6-24，免费额度共 24GB)
 
 # ====== 邮件通知配置 ======
 # QQ 邮箱: smtp.qq.com:587，需要开启 SMTP 并获取授权码
@@ -58,7 +58,6 @@ SUCCESS_FLAG="/opt/oracle-arm-grabber/.success"
 
 log() {
     local msg="[$(date '+%Y-%m-%d %H:%M:%S')] $1"
-    echo "$msg" >&2
     echo "$msg" >> "$LOG_FILE" 2>/dev/null || true
 }
 
@@ -95,15 +94,19 @@ EOF
 
 handle_rate_limit() {
     local backoff=$BACKOFF_INITIAL
+    local max_iterations=5  # 最多退避 5 次: 5+10+20+40+60 = 135 秒
+    local iteration=0
+    
     log "Rate limit detected (429). Starting exponential backoff..."
     
-    while [[ $backoff -le $BACKOFF_MAX ]]; do
-        log "Waiting ${backoff}s before retry..."
+    while [[ $iteration -lt $max_iterations ]]; do
+        log "Backoff ${iteration}/${max_iterations}: waiting ${backoff}s..."
         sleep $backoff
         backoff=$((backoff * 2))
         if [[ $backoff -gt $BACKOFF_MAX ]]; then
             backoff=$BACKOFF_MAX
         fi
+        iteration=$((iteration + 1))
     done
     
     log "Backoff complete. Resuming normal operation."
@@ -158,12 +161,14 @@ grab_arm_instance() {
 EOF
     
     local retry_count=0
+    local total_attempts=0
     
     while true; do
         for AD in "${ADS[@]}"; do
             [[ -z "$AD" ]] && continue
             
-            log "==> Trying AD: $AD (Attempt: $((retry_count + 1)))"
+            total_attempts=$((total_attempts + 1))
+            log "==> [Round $((retry_count + 1))] Trying AD: $AD (Total attempt: $total_attempts)"
             
             set +e
             OUT=$(oci compute instance launch \
